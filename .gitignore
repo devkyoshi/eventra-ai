@@ -1,25 +1,25 @@
-# Virtual environment
-.venv/
-venv/
-env/
+# Backend (Python)
+backend/.venv/
+backend/venv/
+backend/env/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/*.egg-info/
+backend/build/
+backend/.eggs/
+backend/logs/
+backend/output/
+backend/data/venues.db
+backend/.env
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Env
-.env
-
-# Generated at runtime — never commit
-/logs/
-/output/
-data/venues.db
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env
 
 # IDE
 .vscode/
@@ -30,3 +30,4 @@ data/venues.db
 # macOS
 .DS_Store
 .history
+.claude

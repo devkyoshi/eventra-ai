@@ -1,187 +1,211 @@
-# AI Event Planning & Management System
+# Eventra-AI
 
-A locally-hosted **Multi-Agent System (MAS)** that automates end-to-end event planning using [LangGraph](https://github.com/langchain-ai/langgraph) and [Ollama](https://ollama.com) (no cloud APIs, no API keys, no recurring cost).
+Eventra-AI is a local event-planning system with:
 
-Given a single natural-language request like:
+- a Python backend in [D:\assignment\eventra-ai\backend](D:\assignment\eventra-ai\backend)
+- a React frontend in [D:\assignment\eventra-ai\frontend](D:\assignment\eventra-ai\frontend)
 
-> *"Plan a 50-person tech meetup in Colombo with a budget of LKR 200,000 on May 15th, 2026."*
+The backend is built around a LangGraph pipeline:
 
-The system autonomously produces ranked venue recommendations, an itemised budget, a run-of-show schedule, an attendee invitation email, and a vendor logistics brief — all written to local files.
+`Coordinator -> Venue -> Budget -> Communications`
 
----
+Right now, the coordinator is implemented. The FastAPI server uses the real coordinator plus mock venue, budget, and communications data so the frontend can still show the full experience.
 
-## Architecture
+## Project Structure
 
-```
-User Request (natural language)
-        │
-        ▼
-┌─────────────────────────┐
-│ 1. Coordinator Agent    │  Parses request → validated EventRequirements
-└─────────────────────────┘
-        │ state.requirements
-        ▼
-┌─────────────────────────┐
-│ 2. Venue Agent          │  SQLite DB + Open-Meteo weather → venue_options
-└─────────────────────────┘
-        │ state.venue_options, state.chosen_venue
-        ▼
-┌─────────────────────────┐
-│ 3. Budget Agent         │  Deterministic budget calculator + schedule builder
-└─────────────────────────┘
-        │ state.budget, state.schedule
-        ▼
-┌─────────────────────────┐
-│ 4. Communications Agent │  Drafts emails + writes plan to disk
-└─────────────────────────┘
-        │
-        ▼
-./output/<event_slug>_<timestamp>/
-    ├── event_plan.md
-    ├── invitation_email.md
-    └── vendor_brief.md
-
-./logs/run_<timestamp>.jsonl   ← full execution trace
+```text
+eventra-ai/
+|- backend/   # Python backend, LangGraph flow, FastAPI server
+`- frontend/  # React + Vite UI
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the full Mermaid diagram and state schema.
+## Backend Prerequisites
 
----
+Before running the backend, make sure you have:
 
-## System Requirements
+- Python 3.11 or newer
+- [Ollama](https://ollama.com) installed
+- the `llama3.1:8b` model pulled locally
 
-| RAM | GPU | Notes |
-|-----|-----|-------|
-| 16 GB+ | Discrete 6 GB VRAM _or_ Apple Silicon M1/M2/M3 | Recommended — use `llama3.1:8b` |
-| 8 GB | Any | Use `phi3:mini` fallback; will be slower |
+## Backend Setup
 
-Minimum free disk: ~20 GB (Ollama models).
+From the repo root:
 
----
-
-## Prerequisites
-
-- **Python 3.11+**
-- **[Ollama](https://ollama.com)** installed and running
-
----
-
-## Setup
-
-### 1. Install Ollama and pull models
-
-```bash
-# Install from https://ollama.com, then:
-ollama pull llama3.1:8b          # primary (~4.7 GB)
-ollama pull phi3:mini             # fallback for low-RAM machines (~2.3 GB)
-```
-
-### 2. Clone the repository
-
-```bash
-git clone <repo-url>
-cd ai-event-planner
-```
-
-### 3. Create a virtual environment and install dependencies
-
-```bash
+```powershell
+cd backend
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+.venv\Scripts\activate
 pip install -e ".[dev]"
+Copy-Item .env.example .env
+python data\seed_db.py
 ```
 
-> **uv users:** `uv venv && uv pip install -e ".[dev]"`
+If Ollama is not ready yet:
 
-### 4. Configure environment (optional)
-
-```bash
-cp .env.example .env
-# Edit .env if Ollama runs on a non-default port, or to switch to phi3:mini
+```powershell
+ollama pull llama3.1:8b
 ```
 
-### 5. Seed the venue database (one-time)
+The default backend config lives in [D:\assignment\eventra-ai\backend\.env](D:\assignment\eventra-ai\backend\.env).
 
-```bash
-python data/seed_db.py
-# Creates data/venues.db with 25-30 realistic Colombo venues
+## Recommended Startup Order
+
+For this project, the smoothest order is:
+
+1. Open the Ollama app first
+2. Confirm the model can run in a terminal
+3. Start the backend
+4. Start the frontend
+
+### Step 1: Open Ollama
+
+Launch the Ollama desktop app and leave it running in the background.
+
+### Step 2: Confirm Ollama can run the model
+
+Open a new PowerShell terminal and run:
+
+```powershell
+ollama run llama3.1:8b
 ```
 
----
+If the model starts and gives you an interactive prompt, Ollama is working.
 
-## Running the Demo
+If it fails, the backend will fail too, so fix Ollama first before starting FastAPI.
 
-```bash
-python run_demo.py "Plan a 50-person tech meetup in Colombo with LKR 200,000 on May 15, 2026"
+You can exit the interactive Ollama prompt with `Ctrl + C`.
+
+### Step 3: Start the backend
+
+In another terminal:
+
+```powershell
+cd D:\assignment\eventra-ai\backend
+.venv\Scripts\activate
+python -m uvicorn api:app --reload
 ```
 
-Output files are written to `./output/<slug>_<timestamp>/`. A full trace log is written to `./logs/`.
+### Step 4: Start the frontend
 
-### Using a different model
+In another terminal:
 
-```bash
-OLLAMA_MODEL=phi3:mini python run_demo.py "..."
+```powershell
+cd D:\assignment\eventra-ai\frontend
+npm install
+npm run dev
 ```
 
----
+Then open the frontend URL shown by Vite, usually [http://127.0.0.1:5173](http://127.0.0.1:5173).
 
-## Running Tests
+## How To Run The Backend
 
-```bash
-pytest tests/                    # unit + integration tests
+There are two useful ways to run it.
+
+### 1. Run the LangGraph demo
+
+Use this if you want to exercise the backend directly from the terminal:
+
+```powershell
+cd backend
+.venv\Scripts\activate
+python run_demo.py "Plan a 50-person tech meetup in Colombo on 2026-07-15 with a budget of LKR 250,000"
 ```
 
-### Running Evaluations (LLM-as-Judge — slow)
+What this does:
 
-```bash
+- creates a trace in `backend\logs\`
+- runs the graph from the command line
+- prints the parsed result or clarification questions
+
+Note: some downstream agents are still stubs, so `run_demo.py` can stop with `NotImplementedError` until the full pipeline is finished.
+
+### 2. Run the FastAPI server
+
+Use this if you want the frontend to talk to the backend:
+
+```powershell
+cd backend
+.venv\Scripts\activate
+python -m uvicorn api:app --reload
+```
+
+The API will start at:
+
+- [http://127.0.0.1:8000](http://127.0.0.1:8000)
+- health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+
+Important:
+
+- `POST /api/plan` uses the real coordinator agent
+- venue, budget, schedule, and communications are currently mocked in `backend/api.py` so the frontend can render a complete response
+
+## Run The Frontend With The Backend
+
+Open two terminals.
+
+Terminal 1:
+
+```powershell
+cd backend
+.venv\Scripts\activate
+python -m uvicorn api:app --reload
+```
+
+Terminal 2:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Then open the Vite URL, usually:
+
+- [http://127.0.0.1:5173](http://127.0.0.1:5173)
+
+The Vite config already proxies `/api` requests to `http://localhost:8000`.
+
+## Backend Tests
+
+From `backend/`:
+
+```powershell
+.venv\Scripts\activate
+pytest tests
+```
+
+Run one file:
+
+```powershell
+pytest tests\test_coordinator.py
+```
+
+## Backend Evaluation Commands
+
+From `backend/`:
+
+```powershell
 python -m evals.eval_coordinator
 python -m evals.eval_venue
 python -m evals.eval_budget
 python -m evals.eval_communications
 ```
 
----
+## Useful Backend Files
 
-## Project Structure
+- [D:\assignment\eventra-ai\backend\api.py](D:\assignment\eventra-ai\backend\api.py) - FastAPI server used by the frontend
+- [D:\assignment\eventra-ai\backend\run_demo.py](D:\assignment\eventra-ai\backend\run_demo.py) - CLI demo runner
+- [D:\assignment\eventra-ai\backend\PROJECT-BOOTSTRAP.md](D:\assignment\eventra-ai\backend\PROJECT-BOOTSTRAP.md) - implementation guide
+- [D:\assignment\eventra-ai\backend\src\event_planner\graph.py](D:\assignment\eventra-ai\backend\src\event_planner\graph.py) - LangGraph wiring
 
-```
-ai-event-planner/
-├── src/event_planner/
-│   ├── state/          # Shared EventState contract (Member 1)
-│   ├── agents/         # One agent per member
-│   ├── prompts/        # System prompts per agent
-│   ├── tools/          # Deterministic tool functions
-│   ├── observability/  # JSONL tracer (Member 4)
-│   ├── llm/            # Ollama client wrapper
-│   └── graph.py        # LangGraph wiring
-├── data/               # venues.sql schema + seed_db.py
-├── tests/              # pytest suite
-├── evals/              # LLM-as-Judge evaluation scripts
-├── docs/               # Architecture diagrams and report
-├── run_demo.py         # Single-command demo runner
-└── logs/ output/       # Runtime-generated (git-ignored)
-```
+## Troubleshooting
 
----
+If the backend does not start:
 
-## Member Responsibilities
-
-| Member | Agent | Key Files |
-|--------|-------|-----------|
-| 1 (you) | Coordinator / Requirements | `agents/coordinator.py`, `tools/requirements_validator.py`, `state/event_state.py` |
-| 2 | Venue & Logistics | `agents/venue.py`, `tools/venue_lookup.py`, `tools/weather_check.py`, `data/` |
-| 3 | Budget & Scheduling | `agents/budget.py`, `tools/budget_calculator.py`, `tools/schedule_builder.py` |
-| 4 | Communications + Observability | `agents/communications.py`, `tools/report_writer.py`, `observability/tracer.py` |
-
----
-
-## Hard Rules (non-negotiable)
-
-1. The LLM **never does arithmetic** — all math goes through `budget_calculator.py`.
-2. No agent invents data — venues from DB, weather from Open-Meteo, budget from calculator.
-3. Full type hints everywhere; `mypy --strict` passes on `tools/`.
-4. No `print()` in agent/tool code — use the tracer.
-5. Tools raise specific exceptions, never return `None` for failure.
-6. Budget line items sum **exactly** to total.
-7. No budget figures in attendee-facing emails.
-8. Every run produces a JSONL trace.
+1. Confirm Ollama is running locally.
+2. Confirm `ollama run llama3.1:8b` works before starting the backend.
+3. Confirm `ollama pull llama3.1:8b` completed successfully.
+4. Confirm you are inside `backend/` before running `python -m uvicorn` or `python run_demo.py`.
+5. Confirm the virtual environment is activated.
+6. If `llama3.1:8b` crashes in Ollama, switch to `phi3:mini` in [D:\assignment\eventra-ai\backend\.env](D:\assignment\eventra-ai\backend\.env).
+7. If the frontend cannot fetch data, check that the backend is running on port `8000`.

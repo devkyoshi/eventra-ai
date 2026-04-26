@@ -42,9 +42,9 @@ export default function App() {
     <div className="min-h-screen bg-white">
       <Header />
 
-      <main className="mx-auto max-w-5xl px-6 pb-24">
+      <main className="mx-auto w-full max-w-5xl px-6 pb-24">
         {/* Hero — text only, centered */}
-        <div className="py-16 text-center">
+        <div className="mx-auto max-w-3xl py-16 text-center">
           <p className="mb-3 text-[12px] font-semibold uppercase tracking-widest text-[#0071E3]">
             Powered by AI
           </p>
@@ -58,7 +58,7 @@ export default function App() {
         </div>
 
         {/* Form + pipeline — vertically stacked and centered */}
-        <div className="flex flex-col items-center gap-10">
+        <div className="flex w-full flex-col items-center gap-10">
           <div className="w-full max-w-2xl">
             <EventInputForm onSubmit={handleSubmit} isLoading={appState === 'loading'} />
           </div>

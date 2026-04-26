@@ -32,3 +32,4 @@ frontend/.env
 .history
 .claude
 CLAUDE.md
+AGENTS.md

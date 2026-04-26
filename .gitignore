@@ -31,3 +31,5 @@ frontend/.env
 .DS_Store
 .history
 .claude
+CLAUDE.md
+AGENTS.md

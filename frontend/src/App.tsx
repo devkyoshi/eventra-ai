@@ -1,122 +1,111 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { Header } from './components/Header'
+import { EventInputForm } from './components/EventInputForm'
+import { PipelineProgress } from './components/PipelineProgress'
+import { ClarificationView } from './components/ClarificationView'
+import { RequirementsCard } from './components/RequirementsCard'
+import { VenueSection } from './components/VenueSection'
+import { BudgetSection } from './components/BudgetSection'
+import { CommunicationsSection } from './components/CommunicationsSection'
+import { planEvent } from './lib/api'
+import type { PlanResponse } from './types/api'
 
-function App() {
-  const [count, setCount] = useState(0)
+type AppState = 'idle' | 'loading' | 'clarification' | 'results' | 'error'
+
+export default function App() {
+  const [appState, setAppState] = useState<AppState>('idle')
+  const [response, setResponse] = useState<PlanResponse | null>(null)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const handleSubmit = async (userRequest: string) => {
+    setAppState('loading')
+    setResponse(null)
+    setErrorMsg('')
+    try {
+      const result = await planEvent(userRequest)
+      setResponse(result)
+      setAppState(result.status === 'clarification_needed' ? 'clarification' : 'results')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred.')
+      setAppState('error')
+    }
+  }
+
+  const pipelineStep =
+    appState === 'loading' ? 1
+    : appState === 'results' ? 4
+    : 0
+
+  const showPipeline = appState !== 'idle'
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+    <div className="min-h-screen bg-white">
+      <Header />
+
+      <main className="mx-auto w-full max-w-5xl px-6 pb-24">
+        {/* Hero — text only, centered */}
+        <div className="mx-auto max-w-3xl py-16 text-center">
+          <p className="mb-3 text-[12px] font-semibold uppercase tracking-widest text-[#0071E3]">
+            Powered by AI
+          </p>
+          <h1 className="mb-4 text-[44px] font-semibold leading-tight tracking-[-0.02em] text-[#1D1D1F] sm:text-[56px]">
+            Plan your perfect event.
+          </h1>
+          <p className="mx-auto mb-12 max-w-lg text-[17px] leading-relaxed text-[#6E6E73]">
+            Describe your event in plain English. Our AI extracts your requirements,
+            finds venues, builds a budget, and drafts communications — in seconds.
           </p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
+        {/* Form + pipeline — vertically stacked and centered */}
+        <div className="flex w-full flex-col items-center gap-10">
+          <div className="w-full max-w-2xl">
+            <EventInputForm onSubmit={handleSubmit} isLoading={appState === 'loading'} />
+          </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          {showPipeline && (
+            <div className="w-full max-w-2xl">
+              <PipelineProgress currentStep={pipelineStep} isLoading={appState === 'loading'} />
+            </div>
+          )}
+
+          {appState === 'error' && (
+            <div className="w-full max-w-2xl rounded-[14px] border border-red-100 bg-red-50 px-6 py-4 text-[14px] text-red-700">
+              <strong>Something went wrong:</strong> {errorMsg}
+            </div>
+          )}
+
+          {appState === 'clarification' && response?.clarification_needed && (
+            <div className="w-full max-w-2xl">
+              <ClarificationView questions={response.clarification_needed} />
+            </div>
+          )}
+
+          {appState === 'results' && response && (
+            <div className="w-full space-y-10">
+              {response.requirements && (
+                <RequirementsCard requirements={response.requirements} />
+              )}
+              {response.venue_options && response.venue_options.length > 0 && (
+                <VenueSection venues={response.venue_options} />
+              )}
+              {response.budget && response.schedule && (
+                <BudgetSection budget={response.budget} schedule={response.schedule} />
+              )}
+              {response.communications && (
+                <CommunicationsSection communications={response.communications} />
+              )}
+            </div>
+          )}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </main>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
   )
 }
-
-export default App

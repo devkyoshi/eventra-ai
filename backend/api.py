@@ -11,15 +11,20 @@ demonstrate the full four-section pipeline.
 
 from __future__ import annotations
 
+import logging
+import time
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from event_planner.agents.coordinator import coordinator_node
+from event_planner.agents.venue import venue_node
 from event_planner.observability.tracer import get_tracer
+from event_planner.tools.venue_lookup import NoVenuesFoundError, VenueDBError
 from event_planner.state.event_state import (
     BudgetBreakdown,
     BudgetLineItem,
@@ -31,7 +36,33 @@ from event_planner.state.event_state import (
     WeatherInfo,
 )
 
+logger = logging.getLogger("eventra.http")
+
 app = FastAPI(title="Eventra AI API", version="0.1.0")
+
+
+@app.on_event("startup")
+async def configure_app_logging() -> None:
+    """Attach a stderr handler to application loggers after uvicorn sets up its own logging.
+
+    Uvicorn only configures its own logger namespaces (uvicorn, uvicorn.error,
+    uvicorn.access). Without this, event_planner.* and eventra.* loggers have
+    no handlers and their output is silently dropped.
+    """
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s %(levelname)-8s %(name)s | %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    )
+
+    for namespace in ("event_planner", "eventra"):
+        log = logging.getLogger(namespace)
+        log.setLevel(logging.DEBUG)
+        if not log.handlers:
+            log.addHandler(handler)
+        log.propagate = False  # prevent double-printing if root ever gets a handler
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +70,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_logger(request: Request, call_next) -> Response:
+    request_id = str(uuid.uuid4())[:8]
+    client = request.client.host if request.client else "unknown"
+    start_ns = time.monotonic_ns()
+
+    logger.info(
+        "→ %s %s | id=%s client=%s content-type=%s content-length=%s",
+        request.method,
+        request.url.path,
+        request_id,
+        client,
+        request.headers.get("content-type", "-"),
+        request.headers.get("content-length", "-"),
+    )
+    logger.debug(
+        "  headers: %s",
+        dict(request.headers),
+    )
+
+    try:
+        response: Response = await call_next(request)
+    except Exception as exc:
+        elapsed_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+        logger.error(
+            "✗ %s %s | id=%s status=500 elapsed=%dms error=%s",
+            request.method,
+            request.url.path,
+            request_id,
+            elapsed_ms,
+            exc,
+        )
+        raise
+
+    elapsed_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+    status = response.status_code
+
+    log = logger.info if status < 400 else logger.warning if status < 500 else logger.error
+    log(
+        "← %s %s | id=%s status=%d elapsed=%dms content-length=%s",
+        request.method,
+        request.url.path,
+        request_id,
+        status,
+        elapsed_ms,
+        response.headers.get("content-length", "-"),
+    )
+
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -402,8 +484,20 @@ def plan_event(body: PlanRequest) -> dict:
 
     reqs: EventRequirements = result["requirements"]
 
-    venue_options = _build_mock_venues(reqs)
-    top_venue_name = venue_options[0]["venue"]["name"] if venue_options else "TBC"
+    try:
+        venue_result = venue_node(result)  # type: ignore[arg-type]
+    except NoVenuesFoundError as exc:
+        tracer.end_run()
+        return {
+            "status": "clarification_needed",
+            "clarification_needed": [str(exc)],
+        }
+    except VenueDBError as exc:
+        tracer.end_run()
+        raise HTTPException(status_code=500, detail=f"Venue database error: {exc}")
+
+    venue_options = [rec.model_dump(mode="json") for rec in venue_result["venue_options"]]
+    top_venue_name = venue_result["chosen_venue"].name if venue_result.get("chosen_venue") else "TBC"
 
     budget = _build_mock_budget(reqs)
     schedule = _build_mock_schedule(reqs)

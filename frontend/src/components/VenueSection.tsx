@@ -1,32 +1,52 @@
-import { MapPin, Users, Star, CheckCircle2, XCircle, CloudSun } from 'lucide-react'
+import { MapPin, Users, Star, CheckCircle2, XCircle, CloudSun, Clock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
 import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
 import { SectionLabel } from './RequirementsCard'
 import type { VenueRecommendation } from '../types/api'
 
+const FORECAST_WINDOW_DAYS = 15
+
 interface Props {
   venues: VenueRecommendation[]
+  eventDate?: string
 }
 
 function formatLKR(amount: number): string {
   return `LKR ${amount.toLocaleString('en-LK')}`
 }
 
-export function VenueSection({ venues }: Props) {
+function daysFromToday(isoDate: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const event = new Date(isoDate)
+  event.setHours(0, 0, 0, 0)
+  return Math.round((event.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+export function VenueSection({ venues, eventDate }: Props) {
+  const forecastAvailable =
+    eventDate !== undefined && daysFromToday(eventDate) <= FORECAST_WINDOW_DAYS
+
   return (
     <section>
       <SectionLabel icon={MapPin} label="Venue Recommendations" step={2} />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {venues.map((rec) => (
-          <VenueCard key={rec.venue.id} rec={rec} />
+          <VenueCard key={rec.venue.id} rec={rec} forecastAvailable={forecastAvailable} />
         ))}
       </div>
     </section>
   )
 }
 
-function VenueCard({ rec }: { rec: VenueRecommendation }) {
+function VenueCard({
+  rec,
+  forecastAvailable,
+}: {
+  rec: VenueRecommendation
+  forecastAvailable: boolean
+}) {
   const { venue, rank, pros, cons, weather_advisory } = rec
   const isTop = rank === 1
 
@@ -106,10 +126,19 @@ function VenueCard({ rec }: { rec: VenueRecommendation }) {
         )}
 
         {/* Weather */}
-        <div className="flex items-start gap-2 rounded-[8px] bg-[#F5F5F7] px-3 py-2">
-          <CloudSun className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF9500]" />
-          <p className="text-[11px] text-[#6E6E73] leading-snug">{weather_advisory}</p>
-        </div>
+        {forecastAvailable ? (
+          <div className="flex items-start gap-2 rounded-[8px] bg-[#F5F5F7] px-3 py-2">
+            <CloudSun className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF9500]" />
+            <p className="text-[11px] text-[#6E6E73] leading-snug">{weather_advisory}</p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-[8px] border border-[#0071E3]/20 bg-[#EBF4FF] px-3 py-2">
+            <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0071E3]" />
+            <p className="text-[11px] text-[#0071E3] leading-snug">
+              Weather forecast available within {FORECAST_WINDOW_DAYS} days of your event date.
+            </p>
+          </div>
+        )}
 
         {/* Amenities */}
         <div className="flex flex-wrap gap-1.5">

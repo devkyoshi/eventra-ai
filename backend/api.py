@@ -30,6 +30,8 @@ from event_planner.state.event_state import (
     VenueRecommendation,
     WeatherInfo,
 )
+from event_planner.tools.budget_calculator import compute_budget
+from event_planner.tools.schedule_builder import build_schedule
 
 app = FastAPI(title="Eventra AI API", version="0.1.0")
 
@@ -197,81 +199,6 @@ def _build_mock_venues(reqs: EventRequirements) -> list[dict]:
     return results
 
 
-def _build_mock_budget(reqs: EventRequirements) -> BudgetBreakdown:
-    total = reqs.budget_lkr
-    n = reqs.attendee_count
-
-    venue = min(int(total * 0.55), 250_000)
-    fb = min(n * 1_200, int(total * 0.30))
-    av = int(total * 0.08)
-    decor = int(total * 0.05) if reqs.event_type in ("wedding", "conference") else 0
-    contingency = total - venue - fb - av - decor
-
-    # Guard against negative contingency when costs exceed budget
-    if contingency < 0:
-        venue += contingency
-        contingency = 0
-
-    items = [
-        BudgetLineItem(
-            category="venue",
-            amount_lkr=venue,
-            percentage=round(venue / total * 100, 1),
-            notes="Full day hire",
-        ),
-        BudgetLineItem(
-            category="food_and_beverage",
-            amount_lkr=fb,
-            percentage=round(fb / total * 100, 1),
-            notes=f"LKR {fb // n if n else 0:,}/head × {n} attendees",
-        ),
-        BudgetLineItem(
-            category="av_equipment",
-            amount_lkr=av,
-            percentage=round(av / total * 100, 1),
-            notes="Projector, microphones, screens",
-        ),
-        BudgetLineItem(
-            category="decor",
-            amount_lkr=decor,
-            percentage=round(decor / total * 100, 1),
-            notes="Floral arrangements and table décor" if decor else "Not budgeted",
-        ),
-        BudgetLineItem(
-            category="contingency",
-            amount_lkr=contingency,
-            percentage=round(contingency / total * 100, 1),
-            notes="10% reserve for unexpected costs",
-        ),
-    ]
-
-    assert sum(i.amount_lkr for i in items) == total, "Budget items do not sum to total"
-
-    return BudgetBreakdown(
-        total_budget_lkr=total,
-        line_items=items,
-        is_balanced=True,
-    )
-
-
-def _build_mock_schedule(reqs: EventRequirements) -> list[ScheduleEntry]:
-    activities = _SCHEDULE_TEMPLATES.get(reqs.event_type, _SCHEDULE_TEMPLATES["tech_meetup"])
-    slots_needed = reqs.duration_hours * 2  # 30-min slots
-    activities = activities[:slots_needed]
-
-    start = datetime(2000, 1, 1, 9, 0)  # anchor time; only HH:MM used
-    entries: list[ScheduleEntry] = []
-    for activity in activities:
-        end = start + timedelta(minutes=30)
-        entries.append(
-            ScheduleEntry(
-                start_time=start.strftime("%H:%M"),
-                end_time=end.strftime("%H:%M"),
-                activity=activity,
-            )
-        )
-        start = end
-    return entries
 
 
 def _build_mock_communications(
@@ -405,8 +332,18 @@ def plan_event(body: PlanRequest) -> dict:
     venue_options = _build_mock_venues(reqs)
     top_venue_name = venue_options[0]["venue"]["name"] if venue_options else "TBC"
 
-    budget = _build_mock_budget(reqs)
-    schedule = _build_mock_schedule(reqs)
+    budget = compute_budget(
+        total_budget_lkr=reqs.budget_lkr,
+        venue_cost=venue_options[0]["venue"]["price_per_day_lkr"] if venue_options else 0,
+        attendees=reqs.attendee_count,
+        event_type=reqs.event_type,
+    )
+    schedule = build_schedule(
+        start_time="09:00",
+        duration_hours=reqs.duration_hours,
+        event_type=reqs.event_type,
+    )
+    
     communications = _build_mock_communications(reqs, top_venue_name)
 
     tracer.end_run()

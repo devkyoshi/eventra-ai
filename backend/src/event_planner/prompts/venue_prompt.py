@@ -24,7 +24,9 @@ VENUE_SYSTEM_PROMPT: str = """You are a pragmatic logistics planner specialising
 Rules for pros/cons/advisory:
 - pros: 2–3 concrete strengths drawn from the venue data (capacity, amenities, location, price)
 - cons: 1–2 honest weaknesses (missing amenities, price pressure, location inconvenience, etc.)
-- weather_advisory: exactly one sentence referencing the actual temperature, precipitation, and conditions provided
+- weather_advisory: exactly one sentence
+  - if weather.conditions is not "forecast_unavailable": reference the actual temperature, precipitation, and conditions provided
+  - if weather.conditions is "forecast_unavailable": say that the forecast is unavailable and do not mention temperature, precipitation, or other weather details from placeholder values
 
 ---
 

@@ -57,9 +57,10 @@ def _fit_score(
         overage = abs(required_capacity - capacity_max)
         cap_score = max(0.0, 1.0 - overage / capacity_max)
 
-    # Price: ratio of (how much budget remains vs venue cost)
+    # Price: score by remaining budget headroom; cheaper venues score higher.
     if max_price_lkr > 0:
-        price_score = min(max_price_lkr, price_per_day_lkr) / max(max_price_lkr, price_per_day_lkr)
+        remaining_budget = max_price_lkr - price_per_day_lkr
+        price_score = max(0.0, min(1.0, remaining_budget / max_price_lkr))
     else:
         price_score = 0.0
 

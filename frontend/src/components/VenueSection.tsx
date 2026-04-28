@@ -17,11 +17,22 @@ function formatLKR(amount: number): string {
 }
 
 function daysFromToday(isoDate: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const event = new Date(isoDate)
-  event.setHours(0, 0, 0, 0)
-  return Math.round((event.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const MS_PER_DAY = 1000 * 60 * 60 * 24
+  const now = new Date()
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+
+  const dateOnlyMatch = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  let eventUtc: number
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch
+    eventUtc = Date.UTC(Number(year), Number(month) - 1, Number(day))
+  } else {
+    const parsed = new Date(isoDate)
+    eventUtc = Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate())
+  }
+
+  return Math.round((eventUtc - todayUtc) / MS_PER_DAY)
 }
 
 export function VenueSection({ venues, eventDate }: Props) {

@@ -19,6 +19,8 @@ export interface Venue {
   description: string
   fit_score: number
   source: string
+  latitude?: number
+  longitude?: number
 }
 
 export interface VenueRecommendation {

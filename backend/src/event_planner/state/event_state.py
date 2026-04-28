@@ -33,6 +33,8 @@ class Venue(BaseModel):
     description: str
     fit_score: float                 # 0.0 – 1.0, set by venue_lookup
     source: str                      # "venue_db" — proves no hallucination
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class WeatherInfo(BaseModel):

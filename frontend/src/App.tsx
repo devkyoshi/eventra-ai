@@ -87,7 +87,10 @@ export default function App() {
                 <RequirementsCard requirements={response.requirements} />
               )}
               {response.venue_options && response.venue_options.length > 0 && (
-                <VenueSection venues={response.venue_options} />
+                <VenueSection
+                  venues={response.venue_options}
+                  eventDate={response.requirements?.event_date}
+                />
               )}
               {response.budget && response.schedule && (
                 <BudgetSection budget={response.budget} schedule={response.schedule} />

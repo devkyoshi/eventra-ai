@@ -4,12 +4,14 @@ Generates a deterministic run-of-show as 30-minute time blocks.
 Event-type-specific block templates ensure appropriate agendas.
 """
 
-# TODO: Member 3 — implement this tool
-# Reference: PROJECT-BOOTSTRAP.md § 7.3 step 3
-
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timedelta
+
 from event_planner.state.event_state import ScheduleEntry
+
+logger = logging.getLogger(__name__)
 
 
 class ScheduleError(Exception):
@@ -17,7 +19,9 @@ class ScheduleError(Exception):
 
 
 # Default block templates per event type.
-# Member 3 may extend or replace these — they exist here to document intent.
+# Each string maps to one 30-minute slot. Slots beyond the template length
+# are filled with "Open Networking"; the very last slot is always
+# "Venue Clearance / Departure".
 SCHEDULE_TEMPLATES: dict[str, list[str]] = {
     "tech_meetup": [
         "Registration & Welcome",
@@ -66,6 +70,24 @@ SCHEDULE_TEMPLATES: dict[str, list[str]] = {
     ],
 }
 
+# Notes to accompany each template activity (optional, keyed by activity name)
+_ACTIVITY_NOTES: dict[str, str] = {
+    "Registration & Welcome":    "Attendees arrive and collect name badges.",
+    "Registration":              "Participants sign in and collect materials.",
+    "Guest Arrival":             "Ushers guide guests to their seats.",
+    "Opening Remarks":           "Host/organiser opens the event.",
+    "Opening Keynote":           "Welcome address and sponsor acknowledgements.",
+    "Break":                     "Tea, coffee, and light snacks.",
+    "Coffee Break":              "Tea, coffee, and light snacks.",
+    "Lunch":                     "Catered lunch.",
+    "Networking":                "Informal networking with speakers and attendees.",
+    "Networking Reception":      "Post-event drinks and canapés.",
+    "Closing":                   "Organiser closing remarks; attendees depart.",
+    "Closing Remarks":           "Summary and next steps; attendees depart.",
+    "Venue Clearance / Departure": "Guests depart; crew begins teardown.",
+    "Open Networking":           "Unstructured networking time.",
+}
+
 
 def build_schedule(
     start_time: str,
@@ -89,9 +111,57 @@ def build_schedule(
 
     Raises:
         ScheduleError: If start_time is malformed or duration_hours <= 0.
-        NotImplementedError: Until Member 3 implements this tool.
     """
-    raise NotImplementedError(
-        "build_schedule is not yet implemented. "
-        "Member 3: see PROJECT-BOOTSTRAP.md § 7.3 step 3."
+    # --- validate inputs ----------------------------------------------------
+    if duration_hours <= 0:
+        raise ScheduleError(f"duration_hours must be > 0, got {duration_hours}")
+
+    try:
+        base_dt = datetime.strptime(start_time, "%H:%M")
+    except ValueError:
+        raise ScheduleError(
+            f"start_time must be in HH:MM 24-hour format, got '{start_time}'"
+        )
+
+    # normalise event type
+    norm = event_type.lower().replace(" ", "_").replace("-", "_")
+    template = SCHEDULE_TEMPLATES.get(norm)
+
+    logger.info(
+        "build_schedule | start=%s duration=%dh type=%s",
+        start_time, duration_hours, norm,
     )
+
+    total_slots = duration_hours * 2   # 30-min blocks
+    slot_delta = timedelta(minutes=30)
+
+    entries: list[ScheduleEntry] = []
+
+    for i in range(total_slots):
+        slot_start = base_dt + slot_delta * i
+        slot_end   = slot_start + slot_delta
+
+        # Determine activity label
+        if i == total_slots - 1:
+            # Final slot is always a clean close
+            activity = "Venue Clearance / Departure"
+        elif template is not None and i < len(template):
+            activity = template[i]
+        elif template is None:
+            # Unknown event type — generic labels
+            activity = f"Session {i + 1}"
+        else:
+            # Template exhausted before duration ends
+            activity = "Open Networking"
+
+        entries.append(
+            ScheduleEntry(
+                start_time=slot_start.strftime("%H:%M"),
+                end_time=slot_end.strftime("%H:%M"),
+                activity=activity,
+                notes=_ACTIVITY_NOTES.get(activity),
+            )
+        )
+
+    logger.info("build_schedule complete | slots=%d", len(entries))
+    return entries
